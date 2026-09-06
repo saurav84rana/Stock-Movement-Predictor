@@ -16,7 +16,8 @@ def _wilder_smooth(series: pd.Series, window: int) -> pd.Series:
         .ewm(alpha=1/window, adjust=False)  # use recursive version
         .mean()
     )
-    return result
+    # result reindexed so that result.iloc[i] = series.iloc[i]
+    return result.reindex(series.index)
 
 def atr_pct(df: pd.DataFrame, window: int = 14) -> pd.Series:
     """Returns Average True Range, as a percentage of close (ATR%) 
@@ -40,8 +41,15 @@ def rsi(df: pd.DataFrame, window: int = 14) -> pd.Series:
 
     avg_gain = _wilder_smooth(gains, window)
     avg_loss = _wilder_smooth(losses, window)
+
     rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+    result = 100 - (100 / (1 + rs))
+
+    # to replace any NaN from 0/0, treat as rsi = 50 instead
+    flat = (avg_gain == 0) & (avg_loss == 0)
+    result[flat] = 50.0
+
+    return result
 
 def stochastic(df: pd.DataFrame, window_k: int = 14, window_d: int = 3
     ) -> tuple[pd.Series, pd.Series]:
@@ -49,21 +57,31 @@ def stochastic(df: pd.DataFrame, window_k: int = 14, window_d: int = 3
     and %D (slow, `window_d` day period SMA of %K)"""
     lowest_win = df["Low"].rolling(window_k).min()
     highest_win = df["High"].rolling(window_k).max()
-    stoch_k = 100 * (df["Close"] - lowest_win) / (highest_win - lowest_win)
+
+    diff = highest_win - lowest_win
+    stoch_k = 100 * (df["Close"] - lowest_win) / diff
+
+    # replace any division by zeros with %K = 50
+    flat = (diff == 0)
+    stoch_k[flat] = 50.0
+
     stoch_d = stoch_k.rolling(window_d).mean()
     return stoch_k, stoch_d
 
 def aroon(df: pd.DataFrame, window: int = 25) -> tuple[pd.Series, pd.Series]:
     """Returns Aroon Up and Aroon Down of lookback period `window`"""
-    # period since last extreme = current index - last extreme occur index
+    # the index of extreme from reversed list (newest to oldest) 
+    # is the same as period since last extreme, picking most recent one
     period_since_high = df["High"].rolling(window).apply(
-        lambda x: len(x) - 1 - np.argmax(x), raw=True
+        lambda x: np.argmax(x[::-1]), 
+        raw=True
     )
     period_since_low = df["Low"].rolling(window).apply(
-        lambda x: len(x) - 1 - np.argmin(x), raw=True
+        lambda x: np.argmin(x[::-1]),
+        raw=True
     )
-    up = 100 * (window - period_since_high) / window
-    down = 100 * (window - period_since_low) / window
+    up = 100 * (window - 1 - period_since_high) / (window - 1)
+    down = 100 * (window - 1 - period_since_low) / (window - 1)
     return up, down
 
 

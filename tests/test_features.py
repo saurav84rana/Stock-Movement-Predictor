@@ -58,6 +58,17 @@ def test_rsi_with_wilder_smooth():
     assert results.iloc[-2] == pytest.approx(64.7059)
     assert results.iloc[-1] == pytest.approx(60.8511)
 
+def test_rsi_flat():
+    """Flat prices should return 50 for RSI"""
+    df_c = pd.DataFrame({
+        "Close": [100]*16
+    })
+
+    results = rsi(df_c, 14)
+
+    assert results.iloc[-2] == pytest.approx(50.0)
+    assert results.iloc[-1] == pytest.approx(50.0)
+
 def test_stochastic():
     """Test stochastic oscillators %K (first 3)
     and %D (first 1)"""
@@ -86,6 +97,19 @@ def test_stochastic():
     )
     # and 1 %D
     assert stoch_d.iloc[-1] == pytest.approx(65.4545)
+
+def test_stochastic_flat():
+    """Flat prices should return 50 for stochastic %K"""
+    df_hlc = pd.DataFrame({
+        "High": [100] * 16,
+        "Low": [100] * 16,
+        "Close": [100] * 16,
+    })
+
+    stoch_k, stoch_d = stochastic(df_hlc, 14, 3)
+
+    assert stoch_k.iloc[-1] == pytest.approx(50.0)
+    assert stoch_d.iloc[-1] == pytest.approx(50.0)
 
 def test_aroon():
     """Test First 3 Aroon Up and Down"""
