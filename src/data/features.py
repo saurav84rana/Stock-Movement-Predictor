@@ -135,7 +135,9 @@ def make_feature_panel(raw_dir: Path) -> pd.DataFrame:
     if not frames:
         raise FileNotFoundError(f"No csvs found in: {raw_dir}")
 
-    return pd.concat(frames, ignore_index=True)
+    panel = pd.concat(frames, ignore_index=True)
+    panel = panel.sort_values(["Date", "ticker"]).reset_index(drop=True)
+    return panel
         
 
 if __name__ == "__main__":
