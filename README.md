@@ -126,3 +126,13 @@ Without a gap, this means there is a dependency between training and test set ne
 It can also cause a slight optimistic bias, which shows that models are performing better than they actually would.
 
 Therefore, I chose `gap = 25` between train and test sets, which separates the test period's rolling window feature from training features, whiles also avoiding lookahead leakage.
+
+## Baselines
+Baseline dummy models to compare machine learning models against:
+
+### Always predict up
+It always predicts that tomorrow's close is higher than today's:\
+`np.ones(n, dtype=int)`
+
+### Buy and hold
+Buy on `start_date` and sell on `end_date`, calculate the return for each stock, then return the equally weighted mean
