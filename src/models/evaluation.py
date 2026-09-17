@@ -30,7 +30,7 @@ def summarise_by_column(df: pd.DataFrame, col: str = "model") -> pd.DataFrame:
 
     summary = (
         df
-        .groupby(col)
+        .groupby(col, sort=False)
         .agg(**aggregations)
         .reset_index()
     )
@@ -60,8 +60,8 @@ def parameter_sweep(dev_df: pd.DataFrame, model_name: str, param_grid: list[dict
     feature_cols = _feature_cols(dev_df)
 
     for params in param_grid:
-        model_label = f"{model_name} (" + ", ".join(f"{k}={v}" for k, v in sorted(params.items())) + ")"
-        # e.g. "gradient_boosting (learning_rate=1, max_iter=1000)"
+        model_label = f"{model_name}__" + "__".join(f"{k}={v}" for k, v in sorted(params.items()))
+        # e.g. "gradient_boosting__learning_rate=1__max_iter=1000"
 
         for fold, (train_idx, test_idx) in enumerate(walk_forward_splits(dev_df, gap=gap)):
             X_train = dev_df[feature_cols].iloc[train_idx]
@@ -151,16 +151,20 @@ def models_baseline_validation(dev_df: pd.DataFrame, gap: int = 25):
 
 def final_holdout_eval(dev_df: pd.DataFrame, test_df:pd.DataFrame, 
                        model_names=("logistic_regression", "gradient_boosting")
-                      ) -> tuple[pd.DataFrame, float]:
+                      ) -> tuple[pd.DataFrame, pd.DataFrame, dict, float]:
     """Train on each model in `model_names` on training df `dev_df`, 
-    test on held out df `test_df`. Returns results DataFrame and buy and hold results
+    test on held out df `test_df`. 
+    
+    Returns results DataFrame, predictions DataFrame, buy and hold return, model dictionary
     
     Please ensure `dev_df` and `test_df` is appropriately spaced with gap
     
     (Used to get final verdict on chosen model)"""
     results: list[dict] = []
+    predictions: list[pd.DataFrame] = []
+    fitted_models: dict = {}
+    
     feature_cols = _feature_cols(dev_df)
-
     X_train, y_train = dev_df[feature_cols], dev_df["target"]
     X_test, y_test = test_df[feature_cols], test_df["target"]
 
@@ -180,6 +184,13 @@ def final_holdout_eval(dev_df: pd.DataFrame, test_df:pd.DataFrame,
             "f1_score": f1_score(y_test, model_pred)
         })
 
+        predictions.append(pd.DataFrame({
+            "model": model_name,
+            "y_pred_proba": model_pred_proba
+        }))
+
+        fitted_models[model_name] = model
+
     # Always up baseline
     baseline_predict = always_up(len(y_test))
 
@@ -192,9 +203,15 @@ def final_holdout_eval(dev_df: pd.DataFrame, test_df:pd.DataFrame,
         "f1_score": f1_score(y_test, baseline_predict, zero_division=0),
     })
 
+    predictions.append(pd.DataFrame({
+        "model": "always_up",
+        "y_pred_proba": baseline_predict
+    }))
+
     results_df = pd.DataFrame(results)
+    predictions_df = pd.concat(predictions, ignore_index=True)
     bh_return = buy_and_hold(test_df, test_df["Date"].min(), test_df["Date"].max())
-    return results_df, bh_return
+    return results_df, predictions_df, bh_return, fitted_models
 
 
 if __name__ == "__main__":
@@ -217,13 +234,27 @@ if __name__ == "__main__":
     dev_df, test_df = df[df["Date"] < cutoff], df[df["Date"] >= cutoff]
     dev_df = trim_tail(dev_df, gap=25)
 
-    # raw reesults
+    # raw results, validation (walk forward validation)
     results_val = models_baseline_validation(dev_df)
     results_val.to_csv(RESULTS_RAW_DIR / "validation_eval.csv", index=False)
 
-    results_final, bh = final_holdout_eval(dev_df, test_df)
+    # raw results, test (final hold out)
+    results_final, results_predictions, bh_return, fitted_models = final_holdout_eval(dev_df, test_df)
     results_final.to_csv(RESULTS_RAW_DIR / "test_eval.csv", index=False)
+    results_predictions.to_csv(RESULTS_RAW_DIR / "test_predictions.csv", index=False)
 
-    # summarised (procesed) results
+    # logreg weights
+    logreg_coef = fitted_models["logistic_regression"].model.named_steps["classifier"].coef_[0]
+    logreg_coef_df = pd.DataFrame({
+        "features": _feature_cols(df),
+        "coefficients": logreg_coef
+    })
+    logreg_coef_df.to_csv(RESULTS_RAW_DIR / "test_logreg_coefs.csv", index=False)
+
+    # summarised results, (procesed) results
     summarise_by_column(results_val).to_csv(
         RESULTS_PROCESSED_DIR / "validation_eval_summary.csv", index=False)
+
+    # additional results
+    with open(RESULTS_RAW_DIR / "test_extra.txt", "w") as f:
+        f.write(f"buy_and_hold_return: {bh_return}")

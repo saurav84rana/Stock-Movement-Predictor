@@ -21,11 +21,11 @@ dev_df = trim_tail(df[df["Date"] < cutoff], gap=25)
 
 param_grid = [
     {},  # default parameters
-    {"C": 0.1}, {"C": 1}, {"C": 10}
+    {"C": 0.01}, {"C": 0.1}, {"C": 10}, {"C": 100}
 ]
 
 results = parameter_sweep(dev_df, MODEL_NAME, param_grid)
-results.to_csv(RESULTS_RAW_DIR / f"logreg_param_sweep.csv", index=False)
+results.to_csv(RESULTS_RAW_DIR / "ps_logreg.csv", index=False)
 
 summarise_by_column(results).to_csv(
-    RESULTS_PROCESSED_DIR / "logreg_param_sweep_summary.csv", index=False)
+    RESULTS_PROCESSED_DIR / "ps_logreg_summary.csv", index=False)

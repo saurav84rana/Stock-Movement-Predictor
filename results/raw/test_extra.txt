@@ -1,0 +1,1 @@
+buy_and_hold_return: 0.2599499719921819

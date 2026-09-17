@@ -28,7 +28,7 @@ param_grid = [
 ]
 
 results = parameter_sweep(dev_df, MODEL_NAME, param_grid)
-results.to_csv(RESULTS_RAW_DIR / "gbm_param_sweep.csv", index=False)
+results.to_csv(RESULTS_RAW_DIR / "ps_gbm.csv", index=False)
 
 summarise_by_column(results).to_csv(
-    RESULTS_PROCESSED_DIR / "gbm_param_sweep_summary.csv", index=False)
+    RESULTS_PROCESSED_DIR / "ps_gbm_summary.csv", index=False)
