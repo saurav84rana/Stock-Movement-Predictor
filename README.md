@@ -1,11 +1,9 @@
 # Stock Movement Predictor
 
-Predict next day stock direction (up/down) using historical price/technical features
 
-And have time aware validation to ensure no lookahead bias, walk forward splits 
-Then compare against naive baselines like always predict up
+## Overview:
+This project predict next day stock direction (up/down) from historical price and technical features, using time aware, walk forward split to ensure no lookahead bias, then compare results against naive baselines. This will be served via a FastAPI endpoint, and dockerised, tested, and version controlled.
 
-This will be served via a FastAPI endpoint, dockerised, tested, version controlled.
 
 ## Stock Universe:
 Includes 24 liquid large cap US stocks, equally distributed across 4 categories, for 8 years of continuous daily OHLCV data. (Trading days from 1st January 2018 to 31st December 2025, inclusive)
@@ -34,105 +32,90 @@ I used the following features:
 | Volatility (x4) | `volatility_*d`,  `atr_pct_14d` | How much current prices varies from recent prices, how turbulent (varied) trading has been. More of a reassurance indicator | 
 | Volume (x4) | `volume_change_*d`  | Helps confirm movement | 
 
-You can find my rough notes including derivations, formulas, and interpretations here: [`features_notes.md`](./notebooks/features_notes.md)
+You can find my rough learning notes including derivations, formulas, and interpretations here: [`features_notes.md`](./notebooks/notes/features_notes.md)
 
 
 ## Walk forward validation (Time Series Split)
 
-### Why use Time Series Split and not others:
-Normal k fold or shuffled 80/20 split, relies on the fact that rows are independent of order and can occur (be placed) anywhere.
+The function `walk_forward_splits()`, performs time series split on unique training dates and not raw dataframe rows, so no single date is split across train and test. Then, finds the row position index of those dates, which is usable with `.iloc` later.
 
-But this data is time dependent, because a row from March can only exist after events reperesented by rows from January and Februray have already happened.
+### Why use Time Series Split, and not other cross validations:
+Normal k-fold or shuffled 80/20 split, relies on the fact that rows are independent of order and can occur (be placed) anywhere.
 
-This means shuffling or k fold split would mean, training on later dates and testing on earlier dates. This lets the model learn from information that wouldn't be available at the date the test prediction was supposedly made.
+But this data is time dependent, because a row from March can only exist after events represented by rows from January and February have already happened.
+
+This means shuffling or k-fold split would mean training on later dates, and testing on earlier dates. This lets the model learn from information that wouldn't be available at the date the test prediction was supposedly made.
 
 Essentially, the validation score could give a misleading optimistic estimate of how well the model would generalise to real future data.
 
 So, instead of those, we use walk forward validation via TimeSeriesSplit, which guarantees all training dates come before any testing dates.
 
-### TimeSeriesSplit `.split()`, extreamly fast:
+Additionally, I chose to use have gap = 25, where gap is purge/embargo between train and test, because not only does it solve lookahead bias that occurs if gap was set to the default of 0, but it also separates test set's rolling window with that of train's (The features' largest lookback window is 25). This reduces dependency and optimistic bias. 
 
-TimeSeriesSplit `.split(x)` returns **INDEXES** of the passed list `x` on what to train and what to test:
-```py
-tss = TimeSeriesSplit(n_splits=5, gap=0)
-x = [7, 8, 9, 10, 11, 12]
-for i, (train_indexes, test_indexes) in enumerate(tss.split(x)):
-    print(f"fold {i}:")
-    print("\t", train_indexes)
-    print("\t", test_indexes)
-```
-```py
-fold 0:
-    [0]
-    [1]
-fold 1:
-    [0, 1]
-    [2]
-fold 2:
-    [0, 1, 2]
-    [3]
-fold 3:
-    [0, 1, 2, 3]
-    [4]
-fold 4:
-    [0, 1, 2, 3, 4]
-    [5]
-```
-Imagine a `partition_size = (len(x) - 1) / n_splits`. The length of `train_indexes` at fold `i`, is `partition_size * i`, whereas the length of `test_indexes` stays constant at `partition_size`.
-
-If gap is passed, thats taken away from length of train_idx, effectively becoming: `train_indexes[:len(train_idx) - gap]`
-
-Basically, `gap` number of items are directly taken off from the ends of `train_indexes`.
+You can find my notes including an explained walkthrough of `walk_forward_split()`, TimeSeriesSplit explanation, and gap justification here: [`walk_forward_cv_notes.md`](./notebooks/notes/walk_forward_cv_notes.md)
 
 
-### What's happening in `walk_forward_splits()`:
-Pass down the processed_df (processed.csv) into `walk_forward_splits()`:
+## Models
+I've used 2 models to compare against the baselines:
+- **Logistic regression**: A linear model (standardised before fitting)
+- **Gradient Boosting**: A non-linear model
 
-- Then extract the dates, keep only unique ones. Thats the `unique_dates` lookup, which includes all trading days. (It is tested so that all dates have all tickers)
+### Baselines:
+Baseline dummy models to compare machine learning models against.
 
-- Next pass `unique_dates` into `tss.split(unique_dates)`, which basically returns an array of tuples, (`train_indexes`, `test_indexes`), where indexes correspond to `unique_dates`'s.
+**Always predict up**: It always predicts that tomorrow's close is higher than today's, literally `np.ones(n, dtype=int)`.
 
-- Then grab the dates by simply plugging `train_indexes` into `unique_dates`: \
-`train_dates = unique_dates[train_indexes]`, same for `test_date`.
+**Buy and hold**: Buy on `start_date` and sell on `end_date`. Calculate the return for each stock, then return the equally weighted mean.
 
-Now get the indexes of the original processed_df, where dates match:
+You can find my explanations, justifications, and notes of alternative popular models other than Logistic Regression and Gradient Boosting, including Naive Bayes, SVM, and Random Forest, here: [`modelling_notes.md`](./notebooks/notes/modelling_notes.md)
 
-- This was done by creating a mask, `df["Date"]` preserves original processed_df's row order, so performing `df["date"].isin(train_dates)` works and also perserves row order. This returns column of True and False if the date matches or not.
 
-- Then to get positional indexes, simply doing `np.flatnonzero(mask)` of mask, which returns only indexes of items in mask that were not 0/False. Because row order was perserved, this is directly a raw positional index.
+## Results/Evaluation
 
-The reason we get positional index, and not just grab the index column of processed_df like `df.index[mask]`, is because a DataFrame's index label row may differ to its physical row position.
+### Methodology
+Firstly, the dataset was split into 2:
+- **Development df**: everything up to 2025-01-01 (exclusive), minus purge gap (25) days 
+- **Testing df**: everything after 2025-01-01 (inclusive), hold this one out for final generalisation test
 
-`np.flatnonzero(mask)` gives us positional index, so that mean `.iloc[]` can safely use the indices later.
+Then, the evaluation process is as follows:
+1. **Training/Validation**: using development df, use walk forward cross validation to find and tune best models/parameters (or not, see below)
+2. **Testing**: With the chosen models and their parameters, train on the entire development df, test on testing df and get results.
 
-### Why gap, and why gap=25:
+Several graphs and csvs were created to visualise the effectiveness of Logistic regression, Gradient Boosting, and Always Up.
 
-#### First reason:
-Because of how target was computed: `target = tomorrow's close > today's close`. It is the only feature that looks ahead for 1 day.
+### Summary of findings
+In general, neither Logistic Regression nor Gradient Boosting emerged victorious. They failed to show consistent and meaningful improvement over Always Up, across the main metrics.
 
-For example, with `gap = 0`, the last row of train uses its next day close price, which is the first row of test. 
+The model's results provides little evidence of robust and exploitable, daily directional signals from the features under this particular setup.
 
-This is lookahead leakage.
+#### For Training/Validation (walk forward validation + parameter sweeps):
+- ROC AUC remained close to 0.50 for all models, suggesting weak or no useful daily directional features were found.
 
-#### Second reason:
-The feature with the longest look back window is `Aroon_up/_down`, with 25 trading days.
+- In parameter sweeps, they showed some changes to recall and F1 scores, but did not improve ROC AUC meaningfully, suggesting different configurations changed classification behaviour (e.g. underfitting/bias), without meaningfully improving ranking information:
 
-Although no features (other than target) looks into the future, if gap is smaller than a given feature's rolling window, then that rolling feature near test/train boundary, shares some of the same price histories.
+- For example, lowering `max_leaf_nodes` to 7, showed higher recall results than default parameters, but ROC AUC stayed the same, showing that its ranking ability has not improved.
 
-For example, with `gap = 0`, for `Aroon_up/_down`, the first row of test will have 24 out of 25 shared rows with last row of train, which the features were derived from. i.e., their feature space are nearly identical.
+#### For Testing (held out (2025) testing):
 
-Without a gap, this means there is a dependency between training and test set near/at boundary, meaning it can make the test set less independent from the training set.
+| model | accuracy | roc_auc | precision | recall | f1 |
+| --- | --- | --- | --- | --- | --- |
+| logistic_regression | 0.526 | 0.520 | 0.529 | 0.882 | 0.662 |
+| gradient_boosting | 0.527 | 0.504 | 0.532 | 0.816 | 0.644 |
+| always_up | 0.525 | 0.500 | 0.525  | 1.000 | 0.689 |
 
-It can also cause a slight optimistic bias, which shows that models are performing better than they actually would.
+![test_roc_curve.png](./notebooks/exploration/figures/test_roc_curve.png)
 
-Therefore, I chose `gap = 25` between train and test sets, which separates the test period's rolling window feature from training features, whiles also avoiding lookahead leakage.
+The graph shows that all models trail around AUC 0.5 diagonal line.
 
-## Baselines
-Baseline dummy models to compare machine learning models against:
+- Logistic Regression showed higher ROC AUC than the rest, but that is not necessarily supported by validation sections, therefore it is not empirical evidence that Logistic Regression is better at classification in this use case.
 
-### Always predict up
-It always predicts that tomorrow's close is higher than today's:\
-`np.ones(n, dtype=int)`
+- Logistic Regression's coefficients suggests a weak short term mean reversion relationship, with features Stochastic %K and %D, and ROC features `return_1d` and `return_5d`, although this should not be interpreted as empirical evidence that these indicators will generalise well for real world applications.
 
-### Buy and hold
-Buy on `start_date` and sell on `end_date`, calculate the return for each stock, then return the equally weighted mean
+#### Buy and Hold, equally weighted mean
+Across the stock universe, over the entire testing period (2025), Buy and Hold shows a return of +25.99%, showing that profitability of the stock universe does not necessarily need daily directional classification.
+
+### Additional Readings
+
+You can find my detailed analysis, comprehensive results tables, plots, and interpretations of all results, walk forward cross validation, parameter sweeps, test set performance, for Logistic Regression, Gradient Boosting, and Always Up, here: [`results_notes.md`](./notebooks/notes/results_notes.md)
+
+Additionally, you can find a refresher on metrics used for evaluations here: [`scores_refresher_notes.md`](./notebooks/notes/scores_refresher_notes.md)
