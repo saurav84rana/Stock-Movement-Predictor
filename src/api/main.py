@@ -50,13 +50,13 @@ def predict(ticker: str, model_name: str = "logistic_regression"):
         raise HTTPException(404, f"No data for ticker: {ticker}")
 
     latest_row = rows.sort_values("Date").iloc[[-1]]
-    y_predict = latest_row[FEATURE_COLS]
+    x_predict = latest_row[FEATURE_COLS]
 
     model = MODELS[model_name]
 
-    pred = "up" if model.predict(y_predict)[0] == 1 else "down"
+    pred = "up" if model.predict(x_predict)[0] == 1 else "down"
 
-    proba_up = model.predict_proba(y_predict)[0]
+    proba_up = model.predict_proba(x_predict)[0]
     probability = proba_up if pred == "up" else 1 - proba_up
 
     return {
