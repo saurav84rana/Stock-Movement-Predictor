@@ -4,9 +4,9 @@
 ## Setup
 ```py
 pip install -r requirements.txt
-pytest                                      # run all test suite
 python -m src.models.evaluate               # regenerate results/
 python -m scripts.train_production_model    # train models for serving
+pytest                                      # run all test suite
 uvicorn src.api.main:app --reload           # run API locally
 ```
 ### or, via Docker:
