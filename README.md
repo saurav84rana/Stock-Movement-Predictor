@@ -1,8 +1,43 @@
 # Stock Movement Predictor
 
 
-## Overview:
-This project predict next day stock direction (up/down) from historical price and technical features, using time aware, walk forward split to ensure no lookahead bias, then compare results against naive baselines. This will be served via a FastAPI endpoint, and dockerised, tested, and version controlled.
+## Setup
+```py
+pip install -r requirements.txt
+pytest                                      # run all test suite
+python -m src.models.evaluate               # regenerate results/
+python -m scripts.train_production_model    # train models for serving
+uvicorn src.api.main:app --reload           # run API locally
+```
+### or, via Docker:
+```
+docker build -t stock-predictor .
+docker run -p 8000:8000 stock-predictor
+```
+
+## Motivation:
+I picked this project out of curiosity and wanted to use this as a learning opportunity. I'm an AI student, and I had very little financial background before starting this project. I wanted to see how a leak free Machine Learning pipeline, would perform on a stock universe from real world stock data. 
+
+I expected the models to have marginally better ranking abilities than a chosen baseline Always Up, but the full story is not as simple and definitely not as I initially expected. 
+
+Please enjoy reading my work as I have enjoyed creating it.
+
+### What is included, at a glance:
+Tested and version controlled throughout:
+
+- 24 liquid large cap US stocks, feature engineered using popular stock indicators.
+
+- A walk forward validation, and used it for Logistic Regression and Gradient Boosting, to predict on training data. Additionally, performed parameter sweep in an attempt to find better model performance.
+
+- Then, train and test, with the full dataset and evaluated performance, all compared with baseline Always Up.
+
+- Evaluation of models from multiple performance metrics (accuracy, ROC AUC, recall, etc.) for a fair judgement and next steps.
+
+- Finally, served by FastAPI and dockerised.
+
+
+## Aim:
+This project predicts next day stock direction (up/down) from historical price and technical features, using time aware, walk forward split to ensure no lookahead bias, then compare results against naive baselines. This will be served via a FastAPI endpoint, and dockerised, tested, and version controlled.
 
 
 ## Stock Universe:
@@ -70,6 +105,16 @@ Baseline dummy models to compare machine learning models against.
 You can find my explanations, justifications, and notes of alternative popular models other than Logistic Regression and Gradient Boosting, including Naive Bayes, SVM, and Random Forest, here: [`modelling_notes.md`](./notebooks/notes/modelling_notes.md)
 
 
+## Architecture
+### Strategy pattern: `src/models/strategies.py`
+`LogisticRegressionStrategy` and `GradientBoostingStrategy` both implement a common `ModelStrategy` interface (`fit`, `predict`, `predict_proba`), so evaluation code and the API can swap between models without knowing which exact class is in use.
+
+### Factory pattern: `get_strategy(name, **params)` 
+Decouples callers from the concrete strategy classes, where model selection is just a string. This is used identically across walk forward validation, parameter sweeps, and later, the API's `model_name` parameter.
+
+These let the same evaluation code run unchanged across both models, and also allows `/predict?model_name=gradient_boosting` to work with no separate code path.
+
+
 ## Results/Evaluation
 
 ### Methodology
@@ -107,15 +152,39 @@ The model's results provides little evidence of robust and exploitable, daily di
 
 The graph shows that all models trail around AUC 0.5 diagonal line.
 
-- Logistic Regression showed higher ROC AUC than the rest, but that is not necessarily supported by validation sections, therefore it is not empirical evidence that Logistic Regression is better at classification in this use case.
+- Logistic Regression showed higher ROC AUC than the rest, but that is not necessarily supported by validation sections, therefore it is not empirical evidence that Logistic Regression is better at classification in this use case, or that it will generalise well for real world applications.
 
 - Logistic Regression's coefficients suggests a weak short term mean reversion relationship, with features Stochastic %K and %D, and ROC features `return_1d` and `return_5d`, although this should not be interpreted as empirical evidence that these indicators will generalise well for real world applications.
 
 #### Buy and Hold, equally weighted mean
-Across the stock universe, over the entire testing period (2025), Buy and Hold shows a return of +25.99%, showing that profitability of the stock universe does not necessarily need daily directional classification.
+Across this stock universe, over the entire testing period (2025), Buy and Hold shows a return of +25.99%, showing that profitability of the stock universe does not necessarily need daily directional classification.
 
 ### Additional Readings
 
 You can find my detailed analysis, comprehensive results tables, plots, and interpretations of all results, walk forward cross validation, parameter sweeps, test set performance, for Logistic Regression, Gradient Boosting, and Always Up, here: [`results_notes.md`](./notebooks/notes/results_notes.md)
 
 Additionally, you can find a refresher on metrics used for evaluations here: [`scores_refresher_notes.md`](./notebooks/notes/scores_refresher_notes.md)
+
+
+## Limitations
+- The 24 tickers are liquid, well known large caps. Companies that struggled or were delisted over 2018-2025 were not included, meaning this specific stock universe likely has a more "perfect" version of real stock market that it actually is.
+
+- 24 stocks across only 4 sectors is also a huge generalisation, and not a full representation of the market. Results observed here should not be assumed to generalise real world markets, other sectors, or non US markets.
+
+- The final generalisation test is on a single held out year (2025). A different year may show a different result, especially given how tight the results already are.
+
+- Buy and hold's return of +25.99% is only specific to this particular historical window and particular stock universe
+
+- No transaction costs or slippage are modeled in this analysis.
+
+- `/predict` doesn't use live market data, and serves from a static snapshot instead.
+
+
+## Possible extensions
+- Calculate model's cumulative return, as a direct comparison against buy and hold return.
+
+- FastAPI's `/predict` with live fetched data, instead of the already computed processed panel.
+
+- A larger or different stock universe, to test whether the result found also holds outside this universe of 24 stocks.
+
+- Instead of only predicting direction, also predict return magnitude.
