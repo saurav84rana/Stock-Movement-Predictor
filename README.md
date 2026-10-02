@@ -35,6 +35,19 @@ Tested and version controlled throughout:
 
 - Finally, served by FastAPI and dockerised.
 
+Additionally complementing markdowns are included:
+
+Rough learning/refresher notes I made and used: \
+[`features_note.md`](./notebooks/notes/features_notes.md), [`scores_refresher_notes.md`](./notebooks/notes/scores_refresher_notes.md)
+
+Walk through explanation for walk forward validation and purge gap: \
+[`walk_forward_cv_notes`](./notebooks/notes/walk_forward_cv_notes.md)
+
+Model choice reasoning and extended analysis of results/testings: \
+[`modelling_notes.md`](./notebooks/notes/modelling_notes.md), [`results_notes.md`](./notebooks/notes/results_notes.md)
+
+
+
 
 ## Aim:
 This project predicts next day stock direction (up/down) from historical price and technical features, using time aware, walk forward split to ensure no lookahead bias, then compare results against naive baselines. This will be served via a FastAPI endpoint, and dockerised, tested, and version controlled.

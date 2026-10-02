@@ -35,7 +35,7 @@ Basically, `gap` number of items are directly taken off from the ends of `train_
 
 # What's happening in `walk_forward_splits()`:
 
-For reference: [`splits.py`](../src/validation/splits.py)
+For reference: [`splits.py`](../../src/validation/splits.py)
 
 Pass down the processed_df (processed.csv) into `walk_forward_splits()`:
 
