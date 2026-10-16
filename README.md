@@ -1,8 +1,18 @@
 # Stock Movement Predictor
 
+## Quick Links
+- [Setup](#setup)
+- [Walk forward validation](#walk-forward-validation-time-series-split) (and [`walk_forward_cv_notes.md`](./notebooks/notes/walk_forward_cv_notes.md))
+- [Architecture](#architecture) 
+- [Results / Evaluation](#resultsevaluation) (and [`results_notes.md`](./notebooks/notes/results_notes.md))
+- [Limitations](#limitations)
+
+## Aim:
+This project predicts next day stock direction (up/down) from historical price and technical features, using time aware, walk forward split to ensure no lookahead bias, then compare results against naive baselines. This will be served via a FastAPI endpoint, and dockerised, tested, and version controlled.
+
 
 ## Setup
-```py
+```bash
 pip install -r requirements.txt
 python -m src.models.evaluate               # regenerate results/
 python -m scripts.train_production_model    # train models for serving
@@ -15,14 +25,7 @@ docker build -t stock-predictor .
 docker run -p 8000:8000 stock-predictor
 ```
 
-## Motivation:
-I picked this project out of curiosity and wanted to use this as a learning opportunity. I'm an AI student, and I had very little financial background before starting this project. I wanted to see how a leak free Machine Learning pipeline, would perform on a stock universe from real world stock data. 
-
-I expected the models to have marginally better ranking abilities than a chosen baseline Always Up, but the full story is not as simple and definitely not as I initially expected. 
-
-Please enjoy reading my work as I have enjoyed creating it.
-
-### What is included, at a glance:
+## What is included, at a glance:
 Tested and version controlled throughout:
 
 - 24 liquid large cap US stocks, feature engineered using popular stock indicators.
@@ -35,10 +38,11 @@ Tested and version controlled throughout:
 
 - Finally, served by FastAPI and dockerised.
 
-Additionally complementing markdowns are included:
+### Supporting notes:
+Additional complementing markdowns I've made throughout are included in `notebooks/notes/`:
 
-Rough learning/refresher notes I made and used: \
-[`features_note.md`](./notebooks/notes/features_notes.md), [`scores_refresher_notes.md`](./notebooks/notes/scores_refresher_notes.md)
+Rough learning/refresher notes: \
+[`features_notes.md`](./notebooks/notes/features_notes.md), [`scores_refresher_notes.md`](./notebooks/notes/scores_refresher_notes.md)
 
 Walk through explanation for walk forward validation and purge gap: \
 [`walk_forward_cv_notes`](./notebooks/notes/walk_forward_cv_notes.md)
@@ -47,10 +51,10 @@ Model choice reasoning and extended analysis of results/testings: \
 [`modelling_notes.md`](./notebooks/notes/modelling_notes.md), [`results_notes.md`](./notebooks/notes/results_notes.md)
 
 
+## Motivation:
+I picked this project out of curiosity and wanted to use this as a learning opportunity. I'm an AI student, and I had very little financial background before starting this project. I wanted to see how a leak free Machine Learning pipeline, would perform on a stock universe from real world stock data. 
 
-
-## Aim:
-This project predicts next day stock direction (up/down) from historical price and technical features, using time aware, walk forward split to ensure no lookahead bias, then compare results against naive baselines. This will be served via a FastAPI endpoint, and dockerised, tested, and version controlled.
+I expected the models to have marginally better ranking abilities than a chosen baseline Always Up, but the full story is not as simple and definitely not as I initially expected. 
 
 
 ## Stock Universe:
@@ -129,7 +133,7 @@ These let the same evaluation code run unchanged across both models, and also al
 
 
 ## Results/Evaluation
-
+> This section is a summary. For the full analysis, see [`results_notes.md`](./notebooks/notes/results_notes.md), which includes evaluation on 5 fold walk forward validation, parameter sweeps on Logistic Regression and Gradient Boosting, evaluation on held out 2025 test, coefficient inspection, with plots to visualise.
 ### Methodology
 Firstly, the dataset was split into 2:
 - **Development df**: everything up to 2025-01-01 (exclusive), minus purge gap (25) days 

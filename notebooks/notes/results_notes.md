@@ -1,4 +1,12 @@
 # Results/Evaluation
+**Contents:**
+- [Validation](#validation)
+- [Parameter sweep](#parameter-sweep)
+- [Test](#test)
+- [Logistic Regression's coefficients](#logistic-regression-feature-weights)
+- [Buy and Hold](#buy-and-hold)
+- [Final Conclusion](#final-conclusion)
+
 ## Models
 I've used 2 models to compare against the baselines:
 - **Logistic regression**: A linear model (standardised before fitting)
